@@ -56,11 +56,11 @@
 using namespace cv;
 using namespace std;
 
+
 int main(int argc, char** argv)
 {
     const char* filename = argc >=2 ? argv[1] : "a1/Table2.jpeg";
 
-    // FIX 1: Removed samples::findFile() so it can read your local file
     Mat src = imread(filename, IMREAD_COLOR);
 
     // Check if image is loaded fine
@@ -77,18 +77,21 @@ int main(int argc, char** argv)
         cv::Point2f(38, 472)    // Bottom Left
     };
 
-    // Define the perfect 1434x683 rectangle we want to create
+    double widthTop = norm(scrPts[1]-scrPts[0]);
+    double widthBottom = norm(scrPts[2]-scrPts[1]);
+
+    double heightRight = norm(scrPts[2]-scrPts[1]);
+    double heightLeft = norm(scrPts[3]-scrPts[1]);
+
     std::vector<cv::Point2f> dstPts = {
         cv::Point2f(0, 0),          // Top Left
-        cv::Point2f(1434, 0),       // Top Right
-        cv::Point2f(1434, 683),     // Bottom Right
-        cv::Point2f(0, 683)         // Bottom Left
+        cv::Point2f(widthTop, 0),       // Top Right
+        cv::Point2f(widthBottom, heightRight),     // Bottom Right
+        cv::Point2f(widthBottom, heightLeft)         // Bottom Left
     };
 
-    // Generate the transformation matrix
     cv::Mat warpMatrix = cv::getPerspectiveTransform(srcPts, dstPts);
 
-    // Create the new, flat, top-down image (where 1 pixel = 1 mm)
     cv::Mat flatTable;
     cv::warpPerspective(src, flatTable, warpMatrix, cv::Size(1434, 683));
 
@@ -100,32 +103,23 @@ int main(int argc, char** argv)
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-    // Loop through every contour found
     for (size_t i = 0; i < contours.size(); i++) {
         
-        // CRITICAL: A mathematical ellipse requires at least 5 points to be fitted!
         if (contours[i].size() >= 5) {
             
-            // Fit the ellipse to the contour points
             cv::RotatedRect fittedEllipse = cv::fitEllipse(contours[i]);
 
-            // Filter out junk/noise
             float width = fittedEllipse.size.width;
             float height = fittedEllipse.size.height;
 
-            // ASSIGNMENT TIP: We know balls are exactly 43 pixels!
-            // Let's only draw ellipses that are between 35 and 50 pixels wide/tall.
             if (width > 35 && width < 130 && height > 35 && height < 130) {
-                // Draw the recognized ellipse in red with a thickness of 2
                 cv::ellipse(flatTable, fittedEllipse, cv::Scalar(0, 0, 255), 2);
             }
         }
     }
 
-    // FIX 2: Removed the redundant second imshow call
     imshow("Detected Pool Balls", flatTable);
     
-    // Check if WSL X-Server is rendering properly by saving a debug image
     imwrite("output_debug.jpg", flatTable);
 
     waitKey(0);
