@@ -1,57 +1,9 @@
-// #include <opencv2/opencv.hpp>
-// #include <vector>
-// #include <iostream> // Added for std::cerr
-
-// int main() {
-//     cv::Mat image = cv::imread("a1/Table2.jpeg");
-
-//     // 1. Check if the image loaded successfully
-//     if (image.empty()) {
-//         std::cerr << "Error: Could not load image. Check the file path!" << std::endl;
-//         return -1;
-//     }
-//     std::cout << "Image width: " << image.cols << ", height: " << image.rows << std::endl;
-//     // 2. Define the 4 corners of the table in the raw photo
-//     std::vector<cv::Point2f> srcPts = {
-//         cv::Point2f(337, 35),   // Top Left
-//         cv::Point2f(1570, 21),  // Top Right
-//         cv::Point2f(1888, 451), // Bottom Right
-//         cv::Point2f(38, 472)    // Bottom Left
-//     };
-
-//     // 3. Define the perfect 1434x683 rectangle we want to create
-//     std::vector<cv::Point2f> dstPts = {
-//         cv::Point2f(0, 0),          // Top Left
-//         cv::Point2f(1434, 0),       // Top Right
-//         cv::Point2f(1434, 683),     // Bottom Right
-//         cv::Point2f(0, 683)         // Bottom Left
-//     };
-
-//     // 4. Generate the transformation matrix
-//     cv::Mat warpMatrix = cv::getPerspectiveTransform(srcPts, dstPts);
-
-//     // 5. Create the new, flat, top-down image (where 1 pixel = 1 mm)
-//     cv::Mat flatTable;
-//     cv::warpPerspective(image, flatTable, warpMatrix, cv::Size(1434, 683));
-
-//     // 6. Show the images on your screen!
-//     cv::imshow("Original Image", image);
-//     cv::imshow("Flattened Table", flatTable);
-
-//     // Wait until the user presses a key on the keyboard, then exit
-//     cv::waitKey(0);
-//     return 0;
-// }
-
-
-
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include <vector>
 #include <iostream> 
 #include <opencv2/opencv.hpp>
-
 
 using namespace cv;
 using namespace std;
@@ -77,17 +29,23 @@ int main(int argc, char** argv)
         cv::Point2f(38, 472)    // Bottom Left
     };
 
-    double widthTop = norm(scrPts[1]-scrPts[0]);
-    double widthBottom = norm(scrPts[2]-scrPts[1]);
+    double widthTop = norm(srcPts[1]-srcPts[0]);
+    double widthBottom = norm(srcPts[2]-srcPts[1]);
 
-    double heightRight = norm(scrPts[2]-scrPts[1]);
-    double heightLeft = norm(scrPts[3]-scrPts[1]);
+    double heightRight = norm(srcPts[2]-srcPts[1]);
+    double heightLeft = norm(srcPts[3]-srcPts[1]);
 
+    // std::vector<cv::Point2f> dstPts = {
+    //     cv::Point2f(0, 0),          // Top Left
+    //     cv::Point2f(widthTop-1, 0),       // Top Right
+    //     cv::Point2f(widthBottom-1, heightRight-1),     // Bottom Right
+    //     cv::Point2f(0, heightLeft-1)         // Bottom Left
+    // };
     std::vector<cv::Point2f> dstPts = {
         cv::Point2f(0, 0),          // Top Left
-        cv::Point2f(widthTop, 0),       // Top Right
-        cv::Point2f(widthBottom, heightRight),     // Bottom Right
-        cv::Point2f(widthBottom, heightLeft)         // Bottom Left
+        cv::Point2f(1434, 0),       // Top Right
+        cv::Point2f(1434, 683),     // Bottom Right
+        cv::Point2f(0, 683)         // Bottom Left
     };
 
     cv::Mat warpMatrix = cv::getPerspectiveTransform(srcPts, dstPts);
@@ -103,24 +61,44 @@ int main(int argc, char** argv)
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-    for (size_t i = 0; i < contours.size(); i++) {
+    std::vector<cv::Vec3f> circles;
+
+    cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 
+                    1,
+                    gray.rows/8,
+                    100,        
+                     30,         
+                     0, 0);  
+
+    for (size_t i = 0; i < circles.size(); i++) {
+        cv::Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+        int radius = cvRound(circles[i][2]);
         
-        if (contours[i].size() >= 5) {
-            
-            cv::RotatedRect fittedEllipse = cv::fitEllipse(contours[i]);
+        // Draw the circle center
+        cv::circle(src, center, 3, cv::Scalar(0, 255, 0), -1, cv::LINE_AA);
 
-            float width = fittedEllipse.size.width;
-            float height = fittedEllipse.size.height;
-
-            if (width > 35 && width < 130 && height > 35 && height < 130) {
-                cv::ellipse(flatTable, fittedEllipse, cv::Scalar(0, 0, 255), 2);
-            }
-        }
+        // Draw the circle outline
+        cv::circle(src, center, radius, cv::Scalar(0, 0, 255), 3, cv::LINE_AA);
     }
+
+    // for (size_t i = 0; i < contours.size(); i++) {
+        
+    //     if (contours[i].size() >= 5) {
+            
+    //         cv::RotatedRect fittedEllipse = cv::fitEllipse(contours[i]);
+
+    //         float width = fittedEllipse.size.width;
+    //         float height = fittedEllipse.size.height;
+
+    //         if (width > 35 && width < 130 && height > 35 && height < 130) {
+    //             cv::ellipse(flatTable, fittedEllipse, cv::Scalar(0, 0, 255), 2);
+    //         }
+    //     }
+    // }
 
     imshow("Detected Pool Balls", flatTable);
     
-    imwrite("output_debug.jpg", flatTable);
+    imwrite("output_debug.jpg", src);
 
     waitKey(0);
     return EXIT_SUCCESS;
