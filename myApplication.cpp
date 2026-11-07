@@ -65,10 +65,10 @@ int main(int argc, char** argv)
 
     cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 
                     1,
-                    gray.rows/8,
+                    1,
                     100,        
                      30,         
-                     0, 0);  
+                     0, 5);  
 
     for (size_t i = 0; i < circles.size(); i++) {
         cv::Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
@@ -96,10 +96,8 @@ int main(int argc, char** argv)
     //     }
     // }
 
-    imshow("Detected Pool Balls", flatTable);
+    imshow("Detected Pool Balls", src);
     
-    imwrite("output_debug.jpg", src);
-
     waitKey(0);
     return EXIT_SUCCESS;
 }
