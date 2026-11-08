@@ -120,16 +120,6 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    // Standard Grayscale Canny 
-    Mat gray, blurred, standardEdges;
-    
-    cvtColor(src, gray, COLOR_BGR2GRAY);
-    
-    GaussianBlur(gray, blurred, Size(5, 5), 1.5, 1.5);
-    
-    Canny(blurred, standardEdges, 50, 150);
-
-
     // Color-Preserving Canny 
     Mat bgr[3];
     split(src, bgr); 
@@ -150,13 +140,10 @@ int main(int argc, char** argv) {
     bitwise_or(colorEdges, edgesR, colorEdges);
 
 
-
-    imwrite("edges_method1_standard.jpg", standardEdges);
     imwrite("edges_method2_color.jpg", colorEdges);
     cout << "Successfully saved edge maps to your current directory!" << endl;
 
     imshow("Original Image", src);
-    imshow("Standard Grayscale Canny", standardEdges);
     imshow("Color-Split Canny", colorEdges);
 
     waitKey(0);
