@@ -107,45 +107,107 @@
 
 #include <opencv2/opencv.hpp>
 #include <iostream>
+#include <vector>
 
 using namespace cv;
 using namespace std;
 
 int main(int argc, char** argv) {
-    const char* filename = argc >= 2 ? argv[1] : "a1/Table2.jpeg";
+    const char* filename = argc >= 2 ? argv[1] : "a1/Table1.jpeg";
     Mat src = imread(filename, IMREAD_COLOR);
 
     if (src.empty()) {
-        cerr << "Error: Could not open or find the image: " << filename << endl;
+        cerr << "Error opening image" << endl;
         return EXIT_FAILURE;
     }
 
-    // Color-Preserving Canny 
+    // 1. Color-Preserving Canny Edge Detection
     Mat bgr[3];
     split(src, bgr); 
 
-    Mat edgesB, edgesG, edgesR, colorEdges;
+    Mat edgesB, edgesG, edgesR;
     
-    // Blur each channel individually
+    // Blur and run Canny on each channel
     GaussianBlur(bgr[0], bgr[0], Size(5, 5), 1.5, 1.5);
     GaussianBlur(bgr[1], bgr[1], Size(5, 5), 1.5, 1.5);
     GaussianBlur(bgr[2], bgr[2], Size(5, 5), 1.5, 1.5);
 
-    // Run Canny on each channel
-    Canny(bgr[0], edgesB, 50, 150);
-    Canny(bgr[1], edgesG, 50, 150);
-    Canny(bgr[2], edgesR, 50, 150);
+    const vector<Vec2i> cannyParams = {{41, 50}, {40, 36}, {36, 101},{2,400}};
+    vector<Mat> colorEdges(cannyParams.size());
+    vector<vector<vector<Point>>> contours(cannyParams.size());
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
+    for (size_t i = 0; i < cannyParams.size(); ++i) {
+        Canny(bgr[0], edgesB, cannyParams[i][0], cannyParams[i][1]);
+        Canny(bgr[1], edgesG, cannyParams[i][0], cannyParams[i][1]);
+        Canny(bgr[2], edgesR, cannyParams[i][0], cannyParams[i][1]);
 
-    bitwise_or(edgesB, edgesG, colorEdges);
-    bitwise_or(colorEdges, edgesR, colorEdges);
+        bitwise_or(edgesB, edgesG, colorEdges[i]);
+        bitwise_or(colorEdges[i], edgesR, colorEdges[i]);
+
+        Mat closedEdges;
+        morphologyEx(colorEdges[i], closedEdges, MORPH_CLOSE, kernel, Point(-1, -1), 2);
+        findContours(closedEdges, contours[i], RETR_LIST, CHAIN_APPROX_SIMPLE);
+    }
+
+    for (const auto& contourSet : contours) {
+        for (const auto& contour : contourSet) {
+            vector<Point> hull;
+            convexHull(contour, hull);
+
+            double area = contourArea(hull);
+            double perimeter = arcLength(hull, true);
+            if (perimeter <= 0 || area < 704 || area > 2800) continue;
+
+            double circularity = 4 * CV_PI * area / (perimeter * perimeter);
+            if (circularity < 0.78) continue;
+
+            Point2f center;
+            float radius;
+            minEnclosingCircle(hull, center, radius);
+            circle(src, center, 3, Scalar(0, 255, 0), -1, LINE_AA);
+            circle(src, center, cvRound(radius), Scalar(0, 0, 255), 3, LINE_AA);
+        }
+    }
+    
 
 
-    imwrite("edges_method2_color.jpg", colorEdges);
-    cout << "Successfully saved edge maps to your current directory!" << endl;
+        std::vector<cv::Point2f> srcPts = {
+        cv::Point2f(337, 35),   // Top Left
+        cv::Point2f(1570, 21),  // Top Right
+        cv::Point2f(1888, 451), // Bottom Right
+        cv::Point2f(38, 472)    // Bottom Left
+    };
 
-    imshow("Original Image", src);
-    imshow("Color-Split Canny", colorEdges);
+    double widthTop = norm(srcPts[1]-srcPts[0]);
+    double widthBottom = norm(srcPts[2]-srcPts[1]);
 
+    double heightRight = norm(srcPts[2]-srcPts[1]);
+    double heightLeft = norm(srcPts[3]-srcPts[1]);
+
+    // std::vector<cv::Point2f> dstPts = {
+    //     cv::Point2f(0, 0),          // Top Left
+    //     cv::Point2f(widthTop-1, 0),       // Top Right
+    //     cv::Point2f(widthBottom-1, heightRight-1),     // Bottom Right
+    //     cv::Point2f(0, heightLeft-1)         // Bottom Left
+    // };
+    std::vector<cv::Point2f> dstPts = {
+        cv::Point2f(0, 0),          // Top Left
+        cv::Point2f(1434, 0),       // Top Right
+        cv::Point2f(1434, 683),     // Bottom Right
+        cv::Point2f(0, 683)         // Bottom Left
+    };
+
+    cv::Mat warpMatrix = cv::getPerspectiveTransform(srcPts, dstPts);
+
+    cv::Mat flatTable;
+    cv::warpPerspective(src, flatTable, warpMatrix, cv::Size(1434, 683));
+
+    // Save and display
+    imwrite("detected_balls.jpg", src);
+    imwrite("transformed.jpg", flatTable);
+    imshow("Detected Pool Balls", src);
+    imwrite("color_edge.jpg", colorEdges[0]);
     waitKey(0);
+    
     return EXIT_SUCCESS;
 }
